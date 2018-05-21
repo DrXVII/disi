@@ -1,0 +1,4 @@
+# "Disi" the DIce SImulator
+Throw various kinds and ammounts of dice to get total and per-dice values.
+
+Quite useful for table-top RPGs and other games when the needed dice are not around.
