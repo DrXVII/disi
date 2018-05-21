@@ -2,8 +2,8 @@ CXX = g++
 CC = gcc
 LD = g++
 #LD = gcc
-CXX_F = -std=c++17
-CC_F = -std=c99
+CXX_F = -std=c++17 -Wall -Wextra
+CC_F = -std=c99 -Wall -Wextra
 CC_DBG_F = -ggdb -DDEBUG
 CXX_DBG_F = -ggdb -DDEBUG
 NAME = disi_dbg
@@ -52,7 +52,11 @@ $(OBJ_D_REL):
 
 $(OBJ_D_REL)/%.o: $(SRC_D)/%.c
 	echo "CC $@"
-	$(CC) -o $@ -c $(CC_REL_F) $(INC) $<
+	$(CC) -o $@ -c $(CC_F) $(CC_REL_F) $(INC) $<
+
+$(OBJ_D_REL)/%.o: $(SRC_D)/%.cpp
+	echo "CXX $@"
+	$(CXX) -o $@ -c $(CXX_F) $(CXX_REL_F) $(INC) $<
 
 #-------------------------------------------------------------------------------
 ctags:
