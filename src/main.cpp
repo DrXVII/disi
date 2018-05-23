@@ -13,7 +13,7 @@ using std::endl;
 using std::shared_ptr;
 
 #define PROGRAM_NAME "Dice Simulator"
-#define PROGRAM_VERSION "v0.0.1"
+#define PROGRAM_VERSION "v1.0.0"
 
 #ifdef DEBUG
 #    define PROGRAM_VERSION_DBG "(DBG)"
@@ -21,11 +21,16 @@ using std::shared_ptr;
 #    define PROGRAM_VERSION_DBG ""
 #endif
 
+#define DBFILE_DEFAULT "./configs.dat"
+
+typedef uint32_t u32;
+typedef int32_t i32;
+
 struct Dice {
-    unsigned sides;
-    int min_val;
-    int increment;
-    unsigned count;
+    u32 sides;
+    i32 min_val;
+    i32 increment;
+    u32 count;
 };
 
 int throw_dice(Dice* _dice);
@@ -38,15 +43,22 @@ string dice_to_str(Dice* _dice);
 void print_configs(vector<Dice*>* _configs);
 void free_configs(vector<Dice*>* _configs);
 int get_int(int _default, int _min, int _max);
+int write_configs(vector<Dice*>* _configs);
+int read_configs(vector<Dice*>* _configs);
 
 int main()
 {
     string program_info(PROGRAM_NAME " " PROGRAM_VERSION_DBG PROGRAM_VERSION);
 
     vector<Dice*> throw_configs;
-    //creating the default config at position 0
-    throw_configs.push_back(new Dice {.sides = 6, .min_val = 1, .increment = 1,
-                                  .count = 3});
+    read_configs(&throw_configs);
+
+    //creating the default config at position 0 if no configs loaded
+    if(throw_configs.size() < 1) {
+        cout << "no configs found, setting default config\n";
+        throw_configs.push_back(new Dice {
+            .sides = 6, .min_val = 1, .increment = 1, .count = 3});
+    }
 
     string def_cfg_str(std::to_string(throw_configs[0]->count) + "d"
             + std::to_string(throw_configs[0]->sides));
@@ -62,7 +74,8 @@ int main()
              << "s - select config\n"
              << "a - add config\n"
              << "r - remove config\n"
-             << "w - (WIP) write config database\n"
+             << "w - write configs to file\n"
+             << "l - load configs from file\n"
              << "q - quit\n";
 
         cout << "> ";
@@ -76,7 +89,8 @@ int main()
         case 'r': remove_config(&throw_configs); break;
             cout << "Sorry, this part is currently under construction.\n";
             break;
-        case 'w': break;
+        case 'w': write_configs(&throw_configs); break;
+        case 'l': read_configs(&throw_configs); break;
         case 'q': break;
         default:
             cout << "invalid selection (" << cmd << ")\n";
@@ -109,7 +123,7 @@ int throw_dice(Dice* _dice)
         total += rand_val;
     }
 
-    cout << "total(" << _dice->count << "d" << _dice->sides << ": "
+    cout << "total" << dice_to_str(_dice) << ": "
          << total << "\n";
 
     return 0;
@@ -241,4 +255,68 @@ int get_int(int _default, int _min, int _max)
     }
 
     return ret_val;
+}
+
+int write_configs(vector<Dice*>* _configs)
+{
+    std::ofstream ofs(DBFILE_DEFAULT, std::ios::binary);
+
+    if(!ofs.is_open()) {
+        cout << "could not open configs data file for writing\n";
+        return -1;
+    }
+
+    cout << "*** WRITING CONFIGS TO FILE ***\n";
+
+    unsigned i = 0;
+    size_t tot_size = 0;
+    for(; i < _configs->size(); ++i) {
+        cout << "writing config #" << i << ": " << dice_to_str((*_configs)[i])
+             << endl;
+        size_t size = sizeof *(*_configs)[i];
+        tot_size += size;
+        ofs.write(reinterpret_cast<char*>((*_configs)[i]), size);
+    }
+
+    ofs.close();
+
+    cout << "[WRITING DONE], total written: "
+         << i << " entries, " << tot_size << " bytes\n";
+
+    return 0;
+}
+
+int read_configs(vector<Dice*>* _configs)
+{
+    std::ifstream ifs(DBFILE_DEFAULT, std::ios::binary | std::ios::ate);
+
+    if(!ifs.is_open()) {
+        cout << "could not open configs data file for reading\n";
+        return -1;
+    }
+
+    size_t element_size = sizeof *(*_configs)[0];
+    auto file_size = ifs.tellg();
+    size_t configs_in_file = file_size / element_size;
+    ifs.seekg(0);
+
+    free_configs(_configs);
+    *_configs = vector<Dice*>(configs_in_file);
+
+    cout << "*** LOADING CONFIGS FROM FILE ***\n";
+
+    unsigned i = 0;
+    for(; i < configs_in_file; ++i) {
+        (*_configs)[i] = new Dice;
+        ifs.read(reinterpret_cast<char*>((*_configs)[i]), element_size);
+        cout << "read config #" << i << ": " << dice_to_str((*_configs)[i])
+             << endl;
+    }
+
+    ifs.close();
+
+    cout << "[READING DONE], total read: " << i << " entries\n";
+
+
+    return 0;
 }
