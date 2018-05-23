@@ -11,9 +11,12 @@ using std::endl;
 #include <fstream>
 #include <memory>
 using std::shared_ptr;
+#include <map>
+using std::map;
+#include <math.h>
 
 #define PROGRAM_NAME "Dice Simulator"
-#define PROGRAM_VERSION "v1.0.0"
+#define PROGRAM_VERSION "v1.1.0"
 
 #ifdef DEBUG
 #    define PROGRAM_VERSION_DBG "(DBG)"
@@ -25,6 +28,7 @@ using std::shared_ptr;
 
 typedef uint32_t u32;
 typedef int32_t i32;
+typedef int64_t i64;
 
 struct Dice {
     u32 sides;
@@ -41,6 +45,7 @@ int select_config(vector<Dice*>* _configs, Dice** cur_config_);
 int remove_config(vector<Dice*>* _configs);
 string dice_to_str(Dice* _dice);
 void print_configs(vector<Dice*>* _configs);
+int calc_stats(Dice* _dice);
 void free_configs(vector<Dice*>* _configs);
 int get_int(int _default, int _min, int _max);
 int write_configs(vector<Dice*>* _configs);
@@ -76,6 +81,7 @@ int main()
              << "r - remove config\n"
              << "w - write configs to file\n"
              << "l - load configs from file\n"
+             << "p - (experimental) see probability statistics\n"
              << "q - quit\n";
 
         cout << "> ";
@@ -91,6 +97,7 @@ int main()
             break;
         case 'w': write_configs(&throw_configs); break;
         case 'l': read_configs(&throw_configs); break;
+        case 'p': calc_stats(cur_config); break;
         case 'q': break;
         default:
             cout << "invalid selection (" << cmd << ")\n";
@@ -223,6 +230,55 @@ void print_configs(vector<Dice*>* _configs) {
     for(unsigned i = 0; i < _configs->size(); ++i) {
         cout << i << ": " << dice_to_str((*_configs)[i]) << "\n";
     }
+}
+
+int calc_stats(Dice* _dice)
+{
+    string cmdbuf;
+    unsigned def_sample_sz = 100000; //the default sample size if no input
+
+    //cin.ignore();
+    //getline(cin, cmdbuf);
+
+    i32 min = _dice->min_val;
+    i32 max = min + (_dice->increment * (_dice->sides - 1));
+
+    std::mt19937 rng;
+    rng.seed(std::random_device()());
+    std::uniform_int_distribution<std::mt19937::result_type> dist(min, max);
+
+    map<int, unsigned> val_stats;
+    for(i64 i = min * _dice->count;
+        i <= max * _dice->count;
+        i += _dice->increment)
+    {
+        val_stats.insert_or_assign(i, 0);
+    }
+
+    unsigned sample_sz = def_sample_sz;
+    for(unsigned i = 0; i < sample_sz; ++i) {
+        std::mt19937::result_type total = 0;
+        for(unsigned i = 0; i < _dice->count; ++i) {
+            auto rand_val = dist(rng);
+            total += rand_val;
+        }
+
+        auto found = val_stats.find(total);
+        found->second += 1;
+        val_stats.insert_or_assign(found->first, found->second);
+    }
+
+    cout << "*** STATISTICS ***\n";
+    for(i64 i = min * _dice->count;
+        i <= max * _dice->count;
+        i += _dice->increment)
+    {
+        auto stat = val_stats.find(i);
+        cout << stat->first << ":" << stat->second
+             << "(" << 100.0d * stat->second / sample_sz << "%)" << endl;
+    }
+
+    return 0;
 }
 
 void free_configs(vector<Dice*>* _configs) {
