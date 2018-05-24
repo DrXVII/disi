@@ -13,10 +13,14 @@ using std::endl;
 using std::shared_ptr;
 #include <map>
 using std::map;
+#include <sstream>
+#include <limits>
+
+//c std lib
 #include <math.h>
 
 #define PROGRAM_NAME "Dice Simulator"
-#define PROGRAM_VERSION "v1.1.0"
+#define PROGRAM_VERSION "v1.3.1"
 
 #ifdef DEBUG
 #    define PROGRAM_VERSION_DBG "(DBG)"
@@ -37,7 +41,10 @@ struct Dice {
     u32 count;
 };
 
-int throw_dice(Dice* _dice);
+int throw_dice(Dice* _dice,
+        std::mt19937* _rng = nullptr,
+        std::uniform_int_distribution<i32>* _dist = nullptr,
+        bool _silent = false, int* result_ = nullptr);
 int custom_throw();
 int add_config(vector<Dice*>* _configs);
 Dice* dice_from_input();
@@ -47,7 +54,9 @@ string dice_to_str(Dice* _dice);
 void print_configs(vector<Dice*>* _configs);
 int calc_stats(Dice* _dice);
 void free_configs(vector<Dice*>* _configs);
-int get_int(int _default, int _min, int _max);
+int get_int(int _default, int _min, int _max, string _prompt = "> ");
+unsigned get_uint(unsigned _default, unsigned _min, unsigned _max,
+    string _prompt = "> ");
 int write_configs(vector<Dice*>* _configs);
 int read_configs(vector<Dice*>* _configs);
 
@@ -70,8 +79,8 @@ int main()
 
     Dice* cur_config = throw_configs[0]; //currently selected config
 
-    char cmd = 0;
-    while (cmd != 'q') {
+    string cmd;
+    while (cmd[0] != 'q') {
         cout << "\n\n"
              << "*** " << program_info << " ***\n"
              << "t - throw " << dice_to_str(cur_config) << "\n"
@@ -81,13 +90,13 @@ int main()
              << "r - remove config\n"
              << "w - write configs to file\n"
              << "l - load configs from file\n"
-             << "p - (experimental) see probability statistics\n"
+             << "p - see probability statistics\n"
              << "q - quit\n";
 
         cout << "> ";
-        cin >> cmd;
+        getline(cin, cmd);
 
-        switch(cmd) {
+        switch(cmd[0]) {
         case 't': throw_dice(cur_config); break;
         case 'c': custom_throw(); break;
         case 's': select_config(&throw_configs, &cur_config); break;
@@ -109,30 +118,49 @@ int main()
     return 0;
 }
 
-int throw_dice(Dice* _dice)
+int throw_dice(Dice* _dice,
+        std::mt19937* _rng, std::uniform_int_distribution<i32>* _dist,
+        bool _silent, int* result_)
 {
+    if(_dice == nullptr) {
+        cout << "dice structure is not initialised (nullptr)";
+    }
+
     if(_dice->sides < 1) {
         cout << "a slight problem: dice can not have less than 1 side\n";
         return -1;
     }
 
-    int min = _dice->min_val;
-    int max = min + (_dice->increment * (_dice->sides - 1));
+    i32 min = _dice->min_val;
+    i32 max = min + (_dice->increment * (_dice->sides - 1));
 
-    std::mt19937 rng;
-    rng.seed(std::random_device()());
-    std::uniform_int_distribution<std::mt19937::result_type> dist(min, max);
+    std::mt19937* rng;
+    //std::uniform_int_distribution<i32> dist(min, max);
+    std::uniform_int_distribution<i32>* dist;
+    if(_rng != nullptr && _dist != nullptr) {
+        rng = _rng;
+        dist = _dist;
+    }
+    else {
+        rng = new std::mt19937;
+        dist = new std::uniform_int_distribution<i32>(min, max);
 
-    std::mt19937::result_type total = 0;
+        rng->seed(std::random_device()());
+    }
+
+    i64 total = 0;
     for(unsigned i = 0; i < _dice->count; ++i) {
-        auto rand_val = dist(rng);
-        cout << "d#" << i+1 << ": " << rand_val << "\n";
+        i32 rand_val = (*dist)(*rng);
+        if(!_silent) { cout << "d#" << i+1 << ": " << rand_val << "\n"; }
         total += rand_val;
     }
 
-    cout << "total" << dice_to_str(_dice) << ": "
-         << total << "\n";
+    if(!_silent) {
+        cout << "total" << dice_to_str(_dice) << ": "
+             << total << "\n";
+    }
 
+    if(result_ != nullptr) { *result_ = total; }
     return 0;
 }
 
@@ -151,14 +179,31 @@ Dice* dice_from_input()
 {
     Dice* dice = new Dice;
 
-    cout << "number of sides: ";
-    cin >> dice->sides;
-    cout << "minimum value: ";
-    cin >> dice->min_val;
-    cout << "value increment (usually 1): ";
-    cin >> dice->increment;
-    cout << "number of dice to throw: ";
-    cin >> dice->count;
+    u32 def_sides = 6;
+    u32 min_sides = 2;
+    u32 max_sides = 1000000;
+    i32 def_min_val = 1;
+    i32 min_min_val = std::numeric_limits<i32>::min();
+    i32 max_min_val = std::numeric_limits<i32>::max();
+    i32 def_increment = 1;
+    i32 min_increment = std::numeric_limits<i32>::min();
+    i32 max_increment = std::numeric_limits<i32>::max();
+    u32 def_dice_count = 6;
+    u32 min_dice_count = 1;
+    u32 max_dice_count = std::numeric_limits<u32>::max();
+
+    dice->sides = get_uint(def_sides, min_sides, max_sides,
+                           "number of sides: ");
+    //cout << "dice sides selected: " << dice->sides << endl;
+    dice->min_val = get_int(def_min_val, min_min_val, max_min_val,
+                            "minimum value: ");
+    //cout << "min val selected: " << dice->min_val << endl;
+    dice->increment = get_int(def_increment, min_increment, max_increment,
+                              "value increment (usually 1): ");
+    //cout << "increment selected: " << dice->increment << endl;
+    dice->count = get_uint(def_dice_count, min_dice_count, max_dice_count,
+                           "number of dice to throw: ");
+    //cout << "dice count selected: " << dice->count << endl;
 
     return dice;
 }
@@ -209,7 +254,7 @@ int remove_config(vector<Dice*>* _configs)
 
 string dice_to_str(Dice* _dice)
 {
-    int die_max = _dice->min_val
+    i32 die_max = _dice->min_val
         + (_dice->increment * (_dice->sides - 1));
 
     string notation_str(std::to_string(_dice->count) + "d"
@@ -218,9 +263,9 @@ string dice_to_str(Dice* _dice)
     string die_max_str(std::to_string(die_max));
 
     string result(notation_str
-        + "(" + die_min_str + "-" + die_max_str
-        + ":" + std::to_string(_dice->min_val * _dice->count)
-        + "-" + std::to_string(die_max * _dice->count) + ")"
+        + "(" + die_min_str + " - " + die_max_str
+        + ")[" + std::to_string(i64(_dice->min_val) * _dice->count)
+        + " - " + std::to_string(i64(die_max) * _dice->count) + "]"
     );
 
     return result;
@@ -235,32 +280,38 @@ void print_configs(vector<Dice*>* _configs) {
 int calc_stats(Dice* _dice)
 {
     string cmdbuf;
-    unsigned def_sample_sz = 100000; //the default sample size if no input
-
-    //cin.ignore();
-    //getline(cin, cmdbuf);
-
+    unsigned def_sample_sz = 1000000; //the default sample size if no input
+    unsigned sample_sz = def_sample_sz;
     i32 min = _dice->min_val;
     i32 max = min + (_dice->increment * (_dice->sides - 1));
+    std::stringstream prompt;
+
+    prompt << "sample size (" << def_sample_sz << "): ";
+
+    sample_sz = get_uint(def_sample_sz,
+            _dice->count * (abs(min) + abs(max)), u32(-1), prompt.str());
+
+    //cout << "sample size will be " << sample_sz << endl;
 
     std::mt19937 rng;
     rng.seed(std::random_device()());
-    std::uniform_int_distribution<std::mt19937::result_type> dist(min, max);
+    std::uniform_int_distribution<i32> dist(min, max);
 
+    //filling a map with statistic counters
     map<int, unsigned> val_stats;
-    for(i64 i = min * _dice->count;
+    for(i64 i = i64(min) * _dice->count;
         i <= max * _dice->count;
         i += _dice->increment)
     {
+        //cout << "mapping stat value for " << i << endl;
         val_stats.insert_or_assign(i, 0);
     }
 
-    unsigned sample_sz = def_sample_sz;
+    //generating and counting the values (brute force)
     for(unsigned i = 0; i < sample_sz; ++i) {
-        std::mt19937::result_type total = 0;
-        for(unsigned i = 0; i < _dice->count; ++i) {
-            auto rand_val = dist(rng);
-            total += rand_val;
+        i32 total = 0;
+        for(unsigned j = 0; j < _dice->count; ++j) {
+            throw_dice(_dice, &rng, &dist, true, &total);
         }
 
         auto found = val_stats.find(total);
@@ -268,14 +319,28 @@ int calc_stats(Dice* _dice)
         val_stats.insert_or_assign(found->first, found->second);
     }
 
+    //printing out the result
+    size_t max_num_ch_count = std::to_string(i64(max) * _dice->count).size();
+    size_t min_num_ch_count = std::to_string(i64(min) * _dice->count).size();
+    size_t max_needed_padding = (max_num_ch_count > min_num_ch_count)
+                            ? max_num_ch_count : min_num_ch_count;
+    //cout << "max_needed_padding = " << max_needed_padding << endl;
+
     cout << "*** STATISTICS ***\n";
-    for(i64 i = min * _dice->count;
+    for(i64 i = i64(min) * _dice->count;
         i <= max * _dice->count;
         i += _dice->increment)
     {
         auto stat = val_stats.find(i);
-        cout << stat->first << ":" << stat->second
-             << "(" << 100.0d * stat->second / sample_sz << "%)" << endl;
+
+        //horribly inefficient, but we only need a few lines printed
+        size_t need_pad_len =
+            max_needed_padding - std::to_string(stat->first).size();
+        string outp_padding(need_pad_len, ' ');
+
+        cout << stat->first << ": " << outp_padding
+             << 100.0d * stat->second / sample_sz << "% ("
+             << stat->second << ")\n";
     }
 
     return 0;
@@ -288,25 +353,55 @@ void free_configs(vector<Dice*>* _configs) {
     }
 }
 
-int get_int(int _default, int _min, int _max)
+int get_int(int _default, int _min, int _max, string _prompt)
 {
     string in_buf;
     int ret_val = _default;
 
-    cout << "> ";
-    cin.ignore(); //ignoring whatever is left over in the input stream
+    cout << _prompt;
+    //cout << "(" << _min << "/" << _max << ")";
     std::getline(cin, in_buf);
 
     try {
-        ret_val = std::stoul(in_buf);
+        ret_val = std::stoi(in_buf);
     } catch(const std::invalid_argument& _e) {
-        cout << "bad input format, selecting default value\n";
+        cout << "bad input format (" << in_buf <<
+            "), selecting default value of " << _default << endl;
     } catch(const std::exception& _e) {
         cout << "conversion exception, what: " << _e.what() << endl;
     }
 
     if(ret_val < _min || ret_val > _max) {
-        cout << "selection out of range, selecting default value\n";
+        cout << "selection out of range, selecting default value of "
+             << _default << endl;
+        ret_val = _default;
+    }
+
+    return ret_val;
+}
+
+unsigned get_uint(unsigned _default, unsigned _min, unsigned _max,
+    string _prompt)
+{
+    string in_buf;
+    unsigned ret_val = _default;
+
+    cout << _prompt;
+    //cout << "(" << _min << "/" << _max << ")";
+    std::getline(cin, in_buf);
+
+    try {
+        ret_val = std::stoul(in_buf);
+    } catch(const std::invalid_argument& _e) {
+        cout << "bad input format (" << in_buf <<
+            "), selecting default value of " << _default << endl;
+    } catch(const std::exception& _e) {
+        cout << "conversion exception, what: " << _e.what() << endl;
+    }
+
+    if(ret_val < _min || ret_val > _max) {
+        cout << "selection out of range, selecting default value of "
+             << _default << endl;
         ret_val = _default;
     }
 
