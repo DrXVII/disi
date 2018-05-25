@@ -20,7 +20,7 @@ using std::map;
 #include <math.h>
 
 #define PROGRAM_NAME "Dice Simulator"
-#define PROGRAM_VERSION "v1.3.1"
+#define PROGRAM_VERSION "v1.3.2"
 
 #ifdef DEBUG
 #    define PROGRAM_VERSION_DBG "(DBG)"
@@ -161,6 +161,9 @@ int throw_dice(Dice* _dice,
     }
 
     if(result_ != nullptr) { *result_ = total; }
+
+    if(_rng == nullptr) { delete rng; }
+    if(_dist == nullptr) { delete dist; }
     return 0;
 }
 
